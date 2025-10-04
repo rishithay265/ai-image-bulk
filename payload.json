@@ -1,26 +1,26 @@
 {
-    "tasks": [
-      {
-        "prompt": "A photorealistic image of a majestic eagle soaring over mountains",
-        "provider": "dalle"
-      },
-      {
-        "prompt": "A cute robot waving hello, cinematic 4k render",
-        "provider": "reve",
-        "aspect_ratio": "1:1"
-      },
-      {
-        "prompt": "A beautiful watercolor painting of a red panda in a bamboo forest",
-        "provider": "gemini"
-      },
-      {
-        "prompt": "A man in a white t-shirt, fashion photography in 90s documentary style",
-        "provider": "minimax",
-        "aspect_ratio": "3:4"
-      },
-      {
-        "prompt": "Abstract art representing the concept of speed, vibrant colors",
-        "provider": "flux-kontext"
-      }
-    ]
-  }
+  "tasks": [
+    {
+      "prompt": "A photorealistic image of a majestic eagle soaring over mountains",
+      "provider": "dalle"
+    },
+    {
+      "prompt": "A cute robot waving hello, cinematic 4k render",
+      "provider": "reve",
+      "aspect_ratio": "1:1"
+    },
+    {
+      "prompt": "A beautiful watercolor painting of a red panda in a bamboo forest",
+      "provider": "gemini"
+    },
+    {
+      "prompt": "A man in a white t-shirt, fashion photography in 90s documentary style",
+      "provider": "minimax",
+      "aspect_ratio": "3:4"
+    },
+    {
+      "prompt": "Abstract art representing the concept of speed, vibrant colors",
+      "provider": "flux-kontext"
+    }
+  ]
+}
