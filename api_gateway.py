@@ -6,7 +6,6 @@ import requests
 from flask import Flask, request, jsonify, redirect
 from openai import OpenAI
 import redis
-from threading import Thread
 
 # ==============================================================================
 # INITIALIZATION
@@ -117,15 +116,11 @@ def generate_with_minimax(prompt, aspect_ratio):
         raise RuntimeError(f"Minimax generation failed: {result.get('base_resp')}")
 
 # ==============================================================================
-# BACKGROUND JOB PROCESSING
+# SYNCHRONOUS JOB PROCESSING (Fixed for Vercel)
 # ==============================================================================
 
-def process_bulk_job(job_id, tasks):
-    """Processes all tasks in a job by calling the appropriate provider."""
-    if not kv:
-        print(f"Job {job_id} cannot start: KV not connected.")
-        return
-
+def process_job_sync(tasks):
+    """Processes all tasks synchronously and returns results immediately."""
     results = []
     total_tasks = len(tasks)
     
@@ -135,8 +130,9 @@ def process_bulk_job(job_id, tasks):
         result_item = {"prompt": prompt, "provider": provider}
 
         try:
-            print(f"Job {job_id}: Starting task {i+1}/{total_tasks} with provider {provider}")
+            print(f"Processing task {i+1}/{total_tasks} with provider {provider}")
             image_url = None
+            
             if provider == "dalle":
                 image_url = generate_with_dalle(prompt, task.get("size", "1024x1024"))
             elif provider == "reve":
@@ -148,31 +144,24 @@ def process_bulk_job(job_id, tasks):
             elif provider.startswith("flux"):
                 model_map = {"flux-kontext": "flux-kontext-pro", "flux-dev": "flux-dev"}
                 model_endpoint = model_map.get(provider)
-                if not model_endpoint: raise ValueError(f"Unknown FLUX model: {provider}")
+                if not model_endpoint: 
+                    raise ValueError(f"Unknown FLUX model: {provider}")
                 image_url = generate_with_bfl(prompt, model_endpoint, task.get("aspect_ratio", "1:1"))
             else:
                 raise ValueError(f"Unsupported provider: {provider}")
 
             result_item["status"] = "Success"
             result_item["imageUrl"] = image_url
+            print(f"✅ Task {i+1} completed successfully")
+            
         except Exception as e:
-            print(f"ERROR in job {job_id}, task {i+1}: {e}")
+            print(f"❌ ERROR in task {i+1}: {e}")
             result_item["status"] = "Failed"
             result_item["error"] = str(e)
         
         results.append(result_item)
-        
-        progress = (i + 1) / total_tasks * 100
-        current_status = json.loads(kv.get(job_id))
-        current_status["progress"] = f"{progress:.0f}%"
-        current_status["results"] = results
-        kv.set(job_id, json.dumps(current_status))
 
-    final_status = json.loads(kv.get(job_id))
-    final_status["status"] = "Completed"
-    final_status["progress"] = "100%"
-    kv.set(job_id, json.dumps(final_status))
-    print(f"Job {job_id} completed.")
+    return results
 
 
 # ==============================================================================
@@ -181,49 +170,55 @@ def process_bulk_job(job_id, tasks):
 
 @app.route('/v1/jobs/create', methods=['POST'])
 def create_job():
-    if not kv: return jsonify({"error": "Service unavailable."}), 503
-    if not request.json or 'tasks' not in request.json: return jsonify({"error": "Request must be JSON with 'tasks' array."}), 400
+    """Create and process job synchronously - FIXED for Vercel"""
+    if not request.json or 'tasks' not in request.json: 
+        return jsonify({"error": "Request must be JSON with 'tasks' array."}), 400
+    
     tasks = request.json['tasks']
-    if not isinstance(tasks, list) or not tasks: return jsonify({"error": "'tasks' must be a non-empty array."}), 400
+    if not isinstance(tasks, list) or not tasks: 
+        return jsonify({"error": "'tasks' must be a non-empty array."}), 400
 
-    job_id = f"job_{uuid.uuid4().hex[:12]}"
-    job_data = {
-        "job_id": job_id, "status": "Queued", "progress": "0%",
-        "submitted_at": int(time.time()), "task_count": len(tasks), "results": []
-    }
-    
-    kv.setex(job_id, 86400, json.dumps(job_data))
-    
-    thread = Thread(target=process_bulk_job, args=(job_id, tasks))
-    thread.daemon = True
-    thread.start()
-    
-    return jsonify({
-        "message": "Job accepted.", "job_id": job_id,
-        "status_endpoint": f"{request.host_url}v1/jobs/status/{job_id}",
-        "results_endpoint": f"{request.host_url}v1/jobs/results/{job_id}"
-    }), 202
+    try:
+        # Process all tasks synchronously
+        results = process_job_sync(tasks)
+        
+        # Count successes and failures
+        success_count = sum(1 for r in results if r["status"] == "Success")
+        failure_count = len(results) - success_count
+        
+        return jsonify({
+            "message": "Job completed successfully",
+            "total_tasks": len(tasks),
+            "successful": success_count,
+            "failed": failure_count,
+            "results": results
+        }), 200
+        
+    except Exception as e:
+        return jsonify({
+            "error": f"Job processing failed: {str(e)}",
+            "message": "Check your API keys and try again"
+        }), 500
 
 @app.route('/v1/jobs/status/<job_id>', methods=['GET'])
 def get_job_status(job_id):
-    if not kv: return jsonify({"error": "Service unavailable."}), 503
-    job_data = kv.get(job_id)
-    if not job_data: return jsonify({"error": "Job not found."}), 404
-    status = json.loads(job_data)
-    status.pop("results", None) 
-    return jsonify(status)
+    """Legacy endpoint - jobs are now processed synchronously"""
+    return jsonify({
+        "message": "Jobs are now processed synchronously. Use /v1/jobs/create to get immediate results.",
+        "status": "deprecated"
+    }), 200
 
 @app.route('/v1/jobs/results/<job_id>', methods=['GET'])
 def get_job_results(job_id):
-    if not kv: return jsonify({"error": "Service unavailable."}), 503
-    job_data = kv.get(job_id)
-    if not job_data: return jsonify({"error": "Job not found."}), 404
-    results = json.loads(job_data)
-    if results.get("status") != "Completed":
-        return jsonify({"message": "Job is not yet complete.", "status": results.get("status")}), 202
-    return jsonify(results)
+    """Legacy endpoint - jobs are now processed synchronously"""
+    return jsonify({
+        "message": "Jobs are now processed synchronously. Use /v1/jobs/create to get immediate results.",
+        "status": "deprecated"
+    }), 200
 
 @app.route('/')
 def index():
-    return "Multi-Provider Bulk Image Generation API is running!"
+    return "Multi-Provider Bulk Image Generation API is running! (Synchronous Mode)"
 
+if __name__ == '__main__':
+    app.run(debug=True)
