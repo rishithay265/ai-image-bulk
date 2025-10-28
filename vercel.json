@@ -1,16 +1,23 @@
 {
-    "version": 2,
-    "builds": [
+  "version": 2,
+  "builds": [
     {
-    "src": "api_gateway.py",
-    "use": "@vercel/python",
-    "config": { "maxLambdaSize": "15mb" }
+      "src": "api_gateway.py",
+      "use": "@vercel/python",
+      "config": {
+        "maxLambdaSize": "15mb"
+      }
     }
-    ],
-    "routes": [
+  ],
+  "routes": [
     {
-    "src": "/(.*)",
-    "dest": "api_gateway.py"
+      "src": "/(.*)",
+      "dest": "api_gateway.py"
     }
-    ]
+  ],
+  "env": {
+    "SUPABASE_URL": "https://ureidlleripigzhkowwx.supabase.co",
+    "SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVyZWlkbGxlcmlwaWd6aGtvd3d4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE2MjE5NTQsImV4cCI6MjA3NzE5Nzk1NH0.LPOYOKYI0au2gE3-vz5HCvDm1GizpQc7FyFiErQjwM0",
+    "SUPABASE_SERVICE_ROLE_KEY": "@supabase_service_role_key"
+  }
 }

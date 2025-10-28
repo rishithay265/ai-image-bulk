@@ -1,0 +1,1122 @@
+﻿About
+Generate images using Bytedance's Seedream 4 model.
+1. Calling the API#
+Install the client#
+The client provides a convenient way to interact with the model API.
+pip install fal-client
+Setup your API Key#
+Set FAL_KEY as an environment variable in your runtime.
+export FAL_KEY="YOUR_API_KEY"
+Submit a request#
+The client API handles the API submit protocol. It will handle the request status updates and return the result when the request is completed.
+PythonPython (async)
+import fal_client
+
+
+def on_queue_update(update):
+    if isinstance(update, fal_client.InProgress):
+        for log in update.logs:
+           print(log["message"])
+
+
+result = fal_client.subscribe(
+    "fal-ai/bytedance/seedream/v4/text-to-image",
+    arguments={
+        "prompt": "A trendy restaurant with a digital menu board displaying \"Seedream 4.0 is available on fal\" in elegant script, with diners enjoying their meals."
+    },
+    with_logs=True,
+    on_queue_update=on_queue_update,
+)
+print(result)
+2. Authentication#
+The API uses an API Key for authentication. It is recommended you set the FAL_KEY environment variable in your runtime when possible.
+API Key#
+Protect your API Key
+When running code on the client-side (e.g. in a browser, mobile app or GUI applications), make sure to not expose your FAL_KEY. Instead, use a server-side proxy to make requests to the API. For more information, check out our server-side integration guide.
+3. Queue#
+Long-running requests
+For long-running requests, such as training jobs or models with slower inference times, it is recommended to check the Queue status and rely on Webhooks instead of blocking while waiting for the result.
+Submit a request#
+The client API provides a convenient way to submit requests to the model.
+PythonPython (async)
+import fal_client
+
+
+handler = fal_client.submit(
+    "fal-ai/bytedance/seedream/v4/text-to-image",
+    arguments={
+        "prompt": "A trendy restaurant with a digital menu board displaying \"Seedream 4.0 is available on fal\" in elegant script, with diners enjoying their meals."
+    },
+    webhook_url="https://optional.webhook.url/for/results",
+)
+
+
+request_id = handler.request_id
+Fetch request status#
+You can fetch the status of a request to check if it is completed or still in progress.
+PythonPython (async)
+status = fal_client.status("fal-ai/bytedance/seedream/v4/text-to-image", request_id, with_logs=True)
+Get the result#
+Once the request is completed, you can fetch the result. See the Output Schema for the expected result format.
+PythonPython (async)
+result = fal_client.result("fal-ai/bytedance/seedream/v4/text-to-image", request_id)
+4. Files#
+Some attributes in the API accept file URLs as input. Whenever that's the case you can pass your own URL or a Base64 data URI.
+Data URI (base64)#
+You can pass a Base64 data URI as a file input. The API will handle the file decoding for you. Keep in mind that for large files, this alternative although convenient can impact the request performance.
+Hosted files (URL)#
+You can also pass your own URLs as long as they are publicly accessible. Be aware that some hosts might block cross-site requests, rate-limit, or consider the request as a bot.
+Uploading files#
+We provide a convenient file storage that allows you to upload files and use them in your requests. You can upload files using the client API and use the returned URL in your requests.
+PythonPython (async)
+url = fal_client.upload_file("path/to/file")
+Read more about file handling in our file upload guide.
+5. Schema#
+Input#
+prompt string
+The text prompt used to generate the image
+image_size ImageSize | Enum
+The size of the generated image. Width and height must be between 1024 and 4096.
+Possible enum values: square_hd, square, portrait_4_3, portrait_16_9, landscape_4_3, landscape_16_9, auto, auto_2K, auto_4K
+Note: For custom image sizes, you can pass the width and height as an object:
+"image_size": {
+  "width": 1280,
+  "height": 720
+}
+num_images integer
+Number of separate model generations to be run with the prompt. Default value: 1
+max_images integer
+If set to a number greater than one, enables multi-image generation. The model will potentially return up to max_images images every generation, and in total, num_images generations will be carried out. In total, the number of images generated will be between num_images and max_images*num_images. Default value: 1
+seed integer
+Random seed to control the stochasticity of image generation.
+sync_mode boolean
+If True, the media will be returned as a data URI and the output data won't be available in the request history.
+enable_safety_checker boolean
+If set to true, the safety checker will be enabled. Default value: true
+enhance_prompt_mode EnhancePromptModeEnum
+The mode to use for enhancing prompt enhancement. Standard mode provides higher quality results but takes longer to generate. Fast mode provides average quality results but takes less time to generate. Default value: "standard"
+Possible enum values: standard, fast
+{
+  "prompt": "A trendy restaurant with a digital menu board displaying \"Seedream 4.0 is available on fal\" in elegant script, with diners enjoying their meals.",
+  "image_size": {
+    "height": 4096,
+    "width": 4096
+  },
+  "num_images": 1,
+  "max_images": 1,
+  "enable_safety_checker": true,
+  "enhance_prompt_mode": "standard"
+}
+Output#
+images list<Image>
+Generated images
+seed integer
+Seed used for generation
+{
+  "images": [
+    {
+      "url": "https://storage.googleapis.com/falserverless/example_outputs/seedream4_t2i_output.png"
+    }
+  ],
+  "seed": 746406749
+}
+Other types#
+File#
+url string
+The URL where the file can be downloaded from.
+content_type string
+The mime type of the file.
+file_name string
+The name of the file. It will be auto-generated if not provided.
+file_size integer
+The size of the file in bytes.
+file_data string
+File data
+Image#
+url string
+The URL where the file can be downloaded from.
+content_type string
+The mime type of the file.
+file_name string
+The name of the file. It will be auto-generated if not provided.
+file_size integer
+The size of the file in bytes.
+file_data string
+File data
+width integer
+The width of the image in pixels.
+height integer
+The height of the image in pixels.
+ImageSize#
+width integer
+The width of the generated image. Default value: 512
+height integer
+The height of the generated image. Default value: 512
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+About
+Qwen-Image with parallel CFG and LoRA support, generate images with the Qwen Image model.
+1. Calling the API#
+Install the client#
+The client provides a convenient way to interact with the model API.
+pip install fal-client
+Setup your API Key#
+Set FAL_KEY as an environment variable in your runtime.
+export FAL_KEY="YOUR_API_KEY"
+Submit a request#
+The client API handles the API submit protocol. It will handle the request status updates and return the result when the request is completed.
+PythonPython (async)
+import fal_client
+
+
+def on_queue_update(update):
+    if isinstance(update, fal_client.InProgress):
+        for log in update.logs:
+           print(log["message"])
+
+
+result = fal_client.subscribe(
+    "fal-ai/qwen-image",
+    arguments={
+        "prompt": "Mount Fuji with cherry blossoms in the foreground, clear sky, peaceful spring day, soft natural light, realistic landscape."
+    },
+    with_logs=True,
+    on_queue_update=on_queue_update,
+)
+print(result)
+2. Authentication#
+The API uses an API Key for authentication. It is recommended you set the FAL_KEY environment variable in your runtime when possible.
+API Key#
+Protect your API Key
+When running code on the client-side (e.g. in a browser, mobile app or GUI applications), make sure to not expose your FAL_KEY. Instead, use a server-side proxy to make requests to the API. For more information, check out our server-side integration guide.
+3. Queue#
+Long-running requests
+For long-running requests, such as training jobs or models with slower inference times, it is recommended to check the Queue status and rely on Webhooks instead of blocking while waiting for the result.
+Submit a request#
+The client API provides a convenient way to submit requests to the model.
+PythonPython (async)
+import fal_client
+
+
+handler = fal_client.submit(
+    "fal-ai/qwen-image",
+    arguments={
+        "prompt": "Mount Fuji with cherry blossoms in the foreground, clear sky, peaceful spring day, soft natural light, realistic landscape."
+    },
+    webhook_url="https://optional.webhook.url/for/results",
+)
+
+
+request_id = handler.request_id
+Fetch request status#
+You can fetch the status of a request to check if it is completed or still in progress.
+PythonPython (async)
+status = fal_client.status("fal-ai/qwen-image", request_id, with_logs=True)
+Get the result#
+Once the request is completed, you can fetch the result. See the Output Schema for the expected result format.
+PythonPython (async)
+result = fal_client.result("fal-ai/qwen-image", request_id)
+4. Files#
+Some attributes in the API accept file URLs as input. Whenever that's the case you can pass your own URL or a Base64 data URI.
+Data URI (base64)#
+You can pass a Base64 data URI as a file input. The API will handle the file decoding for you. Keep in mind that for large files, this alternative although convenient can impact the request performance.
+Hosted files (URL)#
+You can also pass your own URLs as long as they are publicly accessible. Be aware that some hosts might block cross-site requests, rate-limit, or consider the request as a bot.
+Uploading files#
+We provide a convenient file storage that allows you to upload files and use them in your requests. You can upload files using the client API and use the returned URL in your requests.
+PythonPython (async)
+url = fal_client.upload_file("path/to/file")
+Read more about file handling in our file upload guide.
+5. Schema#
+Input#
+prompt string
+The prompt to generate the image with
+image_size ImageSize | Enum
+The size of the generated image. Default value: landscape_4_3
+Possible enum values: square_hd, square, portrait_4_3, portrait_16_9, landscape_4_3, landscape_16_9
+Note: For custom image sizes, you can pass the width and height as an object:
+"image_size": {
+  "width": 1280,
+  "height": 720
+}
+num_inference_steps integer
+The number of inference steps to perform. Default value: 30
+seed integer
+The same seed and the same prompt given to the same version of the model will output the same image every time.
+guidance_scale float
+The CFG (Classifier Free Guidance) scale is a measure of how close you want the model to stick to your prompt when looking for a related image to show you. Default value: 2.5
+sync_mode boolean
+If True, the media will be returned as a data URI and the output data won't be available in the request history.
+num_images integer
+The number of images to generate. Default value: 1
+enable_safety_checker boolean
+If set to true, the safety checker will be enabled. Default value: true
+output_format OutputFormatEnum
+The format of the generated image. Default value: "png"
+Possible enum values: jpeg, png
+negative_prompt string
+The negative prompt for the generation Default value: " "
+acceleration AccelerationEnum
+Acceleration level for image generation. Options: 'none', 'regular', 'high'. Higher acceleration increases speed. 'regular' balances speed and quality. 'high' is recommended for images without text. Default value: "none"
+Possible enum values: none, regular, high
+loras list<LoraWeight>
+The LoRAs to use for the image generation. You can use up to 3 LoRAs and they will be merged together to generate the final image.
+{
+  "prompt": "Mount Fuji with cherry blossoms in the foreground, clear sky, peaceful spring day, soft natural light, realistic landscape.",
+  "image_size": "landscape_4_3",
+  "num_inference_steps": 30,
+  "guidance_scale": 2.5,
+  "num_images": 1,
+  "enable_safety_checker": true,
+  "output_format": "png",
+  "negative_prompt": "blurry, ugly",
+  "acceleration": "none"
+}
+Output#
+images list<Image>
+The generated image files info.
+timings Timings
+seed integer
+Seed of the generated Image. It will be the same value of the one passed in the input or the randomly generated that was used in case none was passed.
+has_nsfw_concepts list<boolean>
+Whether the generated images contain NSFW concepts.
+prompt string
+The prompt used for generating the image.
+{
+  "images": [
+    {
+      "height": 768,
+      "content_type": "image/jpeg",
+      "url": "https://v3.fal.media/files/rabbit/KoIbq6nhDBDPxDQrivW-m.png",
+      "width": 1024
+    }
+  ],
+  "prompt": ""
+}
+Other types#
+ImageSize#
+width integer
+The width of the generated image. Default value: 512
+height integer
+The height of the generated image. Default value: 512
+LoraWeight#
+path string
+URL or the path to the LoRA weights.
+scale float
+The scale of the LoRA weight. This is used to scale the LoRA weight before merging it with the base model. Default value: 1
+Image#
+url string
+width integer
+height integer
+content_type string
+Default value: "image/jpeg"
+
+
+
+
+
+
+About
+Generate images using Bytedance's SeedDream 3.0 model.
+Seedream 3.0 is a bilingual (Chinese and English) text-to-image model that excels at:
+* Native 2K high resolution output with various aspect ratios
+* Exceptional text layout for visually stunning results
+* Accurate small and large text generation
+* Photorealistic portraits with cinematic beauty
+* Fast generation (3 seconds for 1K images)
+* Strong instruction following and enhanced aesthetics
+1. Calling the API#
+Install the client#
+The client provides a convenient way to interact with the model API.
+pip install fal-client
+Setup your API Key#
+Set FAL_KEY as an environment variable in your runtime.
+export FAL_KEY="YOUR_API_KEY"
+Submit a request#
+The client API handles the API submit protocol. It will handle the request status updates and return the result when the request is completed.
+PythonPython (async)
+import fal_client
+
+
+def on_queue_update(update):
+    if isinstance(update, fal_client.InProgress):
+        for log in update.logs:
+           print(log["message"])
+
+
+result = fal_client.subscribe(
+    "fal-ai/bytedance/seedream/v3/text-to-image",
+    arguments={
+        "prompt": "Fisheye lens, the head of a cat, the image shows the effect that the facial features of the cat are distorted due to the shooting method."
+    },
+    with_logs=True,
+    on_queue_update=on_queue_update,
+)
+print(result)
+2. Authentication#
+The API uses an API Key for authentication. It is recommended you set the FAL_KEY environment variable in your runtime when possible.
+API Key#
+Protect your API Key
+When running code on the client-side (e.g. in a browser, mobile app or GUI applications), make sure to not expose your FAL_KEY. Instead, use a server-side proxy to make requests to the API. For more information, check out our server-side integration guide.
+3. Queue#
+Long-running requests
+For long-running requests, such as training jobs or models with slower inference times, it is recommended to check the Queue status and rely on Webhooks instead of blocking while waiting for the result.
+Submit a request#
+The client API provides a convenient way to submit requests to the model.
+PythonPython (async)
+import fal_client
+
+
+handler = fal_client.submit(
+    "fal-ai/bytedance/seedream/v3/text-to-image",
+    arguments={
+        "prompt": "Fisheye lens, the head of a cat, the image shows the effect that the facial features of the cat are distorted due to the shooting method."
+    },
+    webhook_url="https://optional.webhook.url/for/results",
+)
+
+
+request_id = handler.request_id
+Fetch request status#
+You can fetch the status of a request to check if it is completed or still in progress.
+PythonPython (async)
+status = fal_client.status("fal-ai/bytedance/seedream/v3/text-to-image", request_id, with_logs=True)
+Get the result#
+Once the request is completed, you can fetch the result. See the Output Schema for the expected result format.
+PythonPython (async)
+result = fal_client.result("fal-ai/bytedance/seedream/v3/text-to-image", request_id)
+4. Files#
+Some attributes in the API accept file URLs as input. Whenever that's the case you can pass your own URL or a Base64 data URI.
+Data URI (base64)#
+You can pass a Base64 data URI as a file input. The API will handle the file decoding for you. Keep in mind that for large files, this alternative although convenient can impact the request performance.
+Hosted files (URL)#
+You can also pass your own URLs as long as they are publicly accessible. Be aware that some hosts might block cross-site requests, rate-limit, or consider the request as a bot.
+Uploading files#
+We provide a convenient file storage that allows you to upload files and use them in your requests. You can upload files using the client API and use the returned URL in your requests.
+PythonPython (async)
+url = fal_client.upload_file("path/to/file")
+Read more about file handling in our file upload guide.
+5. Schema#
+Input#
+prompt string
+The text prompt used to generate the image
+image_size ImageSize | Enum
+Use for finer control over the output image size. Will be used over aspect_ratio, if both are provided. Width and height must be between 512 and 2048.
+Possible enum values: square_hd, square, portrait_4_3, portrait_16_9, landscape_4_3, landscape_16_9
+Note: For custom image sizes, you can pass the width and height as an object:
+"image_size": {
+  "width": 1280,
+  "height": 720
+}
+guidance_scale float
+Controls how closely the output image aligns with the input prompt. Higher values mean stronger prompt correlation. Default value: 2.5
+num_images integer
+Number of images to generate Default value: 1
+seed integer
+Random seed to control the stochasticity of image generation.
+enable_safety_checker boolean
+If set to true, the safety checker will be enabled. Default value: true
+sync_mode boolean
+If True, the media will be returned as a data URI and the output data won't be available in the request history.
+{
+  "prompt": "Fisheye lens, the head of a cat, the image shows the effect that the facial features of the cat are distorted due to the shooting method.",
+  "guidance_scale": 2.5,
+  "num_images": 1,
+  "enable_safety_checker": true
+}
+Output#
+images list<Image>
+Generated images
+seed integer
+Seed used for generation
+{
+  "images": [
+    {
+      "url": "https://v3.fal.media/files/rabbit/EJqemc4hQlHKAtkkfTJqB_a2aaccab7ff84740b6323da580146087.png"
+    }
+  ],
+  "seed": 42
+}
+Other types#
+File#
+url string
+The URL where the file can be downloaded from.
+content_type string
+The mime type of the file.
+file_name string
+The name of the file. It will be auto-generated if not provided.
+file_size integer
+The size of the file in bytes.
+file_data string
+File data
+Image#
+url string
+The URL where the file can be downloaded from.
+content_type string
+The mime type of the file.
+file_name string
+The name of the file. It will be auto-generated if not provided.
+file_size integer
+The size of the file in bytes.
+file_data string
+File data
+width integer
+The width of the image in pixels.
+height integer
+The height of the image in pixels.
+ImageSize#
+width integer
+The width of the generated image. Default value: 512
+height integer
+The height of the generated image. Default value: 512
+
+
+
+
+About
+Ideogram V3
+1. Calling the API#
+Install the client#
+The client provides a convenient way to interact with the model API.
+pip install fal-client
+Setup your API Key#
+Set FAL_KEY as an environment variable in your runtime.
+export FAL_KEY="YOUR_API_KEY"
+Submit a request#
+The client API handles the API submit protocol. It will handle the request status updates and return the result when the request is completed.
+PythonPython (async)
+import fal_client
+
+
+def on_queue_update(update):
+    if isinstance(update, fal_client.InProgress):
+        for log in update.logs:
+           print(log["message"])
+
+
+result = fal_client.subscribe(
+    "fal-ai/ideogram/v3",
+    arguments={
+        "prompt": "The Bone Forest stretched across the horizon, its trees fashioned from the ossified remains of ancient leviathans that once swam through the sky. Shamans with antlers growing from their shoulders and eyes that revealed the true nature of any being they beheld conducted rituals to commune with the spirits that still inhabited the calcified grove. In sky writes \"Ideogram V3 in fal.ai\""
+    },
+    with_logs=True,
+    on_queue_update=on_queue_update,
+)
+print(result)
+2. Authentication#
+The API uses an API Key for authentication. It is recommended you set the FAL_KEY environment variable in your runtime when possible.
+API Key#
+Protect your API Key
+When running code on the client-side (e.g. in a browser, mobile app or GUI applications), make sure to not expose your FAL_KEY. Instead, use a server-side proxy to make requests to the API. For more information, check out our server-side integration guide.
+3. Queue#
+Long-running requests
+For long-running requests, such as training jobs or models with slower inference times, it is recommended to check the Queue status and rely on Webhooks instead of blocking while waiting for the result.
+Submit a request#
+The client API provides a convenient way to submit requests to the model.
+PythonPython (async)
+import fal_client
+
+
+handler = fal_client.submit(
+    "fal-ai/ideogram/v3",
+    arguments={
+        "prompt": "The Bone Forest stretched across the horizon, its trees fashioned from the ossified remains of ancient leviathans that once swam through the sky. Shamans with antlers growing from their shoulders and eyes that revealed the true nature of any being they beheld conducted rituals to commune with the spirits that still inhabited the calcified grove. In sky writes \"Ideogram V3 in fal.ai\""
+    },
+    webhook_url="https://optional.webhook.url/for/results",
+)
+
+
+request_id = handler.request_id
+Fetch request status#
+You can fetch the status of a request to check if it is completed or still in progress.
+PythonPython (async)
+status = fal_client.status("fal-ai/ideogram/v3", request_id, with_logs=True)
+Get the result#
+Once the request is completed, you can fetch the result. See the Output Schema for the expected result format.
+PythonPython (async)
+result = fal_client.result("fal-ai/ideogram/v3", request_id)
+4. Files#
+Some attributes in the API accept file URLs as input. Whenever that's the case you can pass your own URL or a Base64 data URI.
+Data URI (base64)#
+You can pass a Base64 data URI as a file input. The API will handle the file decoding for you. Keep in mind that for large files, this alternative although convenient can impact the request performance.
+Hosted files (URL)#
+You can also pass your own URLs as long as they are publicly accessible. Be aware that some hosts might block cross-site requests, rate-limit, or consider the request as a bot.
+Uploading files#
+We provide a convenient file storage that allows you to upload files and use them in your requests. You can upload files using the client API and use the returned URL in your requests.
+PythonPython (async)
+url = fal_client.upload_file("path/to/file")
+Read more about file handling in our file upload guide.
+5. Schema#
+Input#
+image_urls list<string>
+A set of images to use as style references (maximum total size 10MB across all style references). The images should be in JPEG, PNG or WebP format
+rendering_speed RenderingSpeedEnum
+The rendering speed to use. Default value: "BALANCED"
+Possible enum values: TURBO, BALANCED, QUALITY
+color_palette ColorPalette
+A color palette for generation, must EITHER be specified via one of the presets (name) or explicitly via hexadecimal representations of the color with optional weights (members)
+style_codes list<string>
+A list of 8 character hexadecimal codes representing the style of the image. Cannot be used in conjunction with style_reference_images or style
+style Enum
+The style type to generate with. Cannot be used with style_codes.
+Possible enum values: AUTO, GENERAL, REALISTIC, DESIGN
+expand_prompt boolean
+Determine if MagicPrompt should be used in generating the request or not. Default value: true
+num_images integer
+Number of images to generate. Default value: 1
+seed integer
+Seed for the random number generator
+sync_mode boolean
+If True, the media will be returned as a data URI and the output data won't be available in the request history.
+style_preset Enum
+Style preset for generation. The chosen style preset will guide the generation.
+Possible enum values: 80S_ILLUSTRATION, 90S_NOSTALGIA, ABSTRACT_ORGANIC, ANALOG_NOSTALGIA, ART_BRUT, ART_DECO, ART_POSTER, AURA, AVANT_GARDE, BAUHAUS, BLUEPRINT, BLURRY_MOTION, BRIGHT_ART, C4D_CARTOON, CHILDRENS_BOOK, COLLAGE, COLORING_BOOK_I, COLORING_BOOK_II, CUBISM, DARK_AURA, DOODLE, DOUBLE_EXPOSURE, DRAMATIC_CINEMA, EDITORIAL, EMOTIONAL_MINIMAL, ETHEREAL_PARTY, EXPIRED_FILM, FLAT_ART, FLAT_VECTOR, FOREST_REVERIE, GEO_MINIMALIST, GLASS_PRISM, GOLDEN_HOUR, GRAFFITI_I, GRAFFITI_II, HALFTONE_PRINT, HIGH_CONTRAST, HIPPIE_ERA, ICONIC, JAPANDI_FUSION, JAZZY, LONG_EXPOSURE, MAGAZINE_EDITORIAL, MINIMAL_ILLUSTRATION, MIXED_MEDIA, MONOCHROME, NIGHTLIFE, OIL_PAINTING, OLD_CARTOONS, PAINT_GESTURE, POP_ART, RETRO_ETCHING, RIVIERA_POP, SPOTLIGHT_80S, STYLIZED_RED, SURREAL_COLLAGE, TRAVEL_POSTER, VINTAGE_GEO, VINTAGE_POSTER, WATERCOLOR, WEIRD, WOODBLOCK_PRINT
+prompt string
+image_size ImageSize | Enum
+The resolution of the generated image Default value: square_hd
+Possible enum values: square_hd, square, portrait_4_3, portrait_16_9, landscape_4_3, landscape_16_9
+Note: For custom image sizes, you can pass the width and height as an object:
+"image_size": {
+  "width": 1280,
+  "height": 720
+}
+negative_prompt string
+Description of what to exclude from an image. Descriptions in the prompt take precedence to descriptions in the negative prompt. Default value: ""
+{
+  "rendering_speed": "BALANCED",
+  "expand_prompt": true,
+  "num_images": 1,
+  "prompt": "The Bone Forest stretched across the horizon, its trees fashioned from the ossified remains of ancient leviathans that once swam through the sky. Shamans with antlers growing from their shoulders and eyes that revealed the true nature of any being they beheld conducted rituals to commune with the spirits that still inhabited the calcified grove. In sky writes \"Ideogram V3 in fal.ai\"",
+  "image_size": "square_hd"
+}
+Output#
+images list<File>
+seed integer
+Seed used for the random number generator
+{
+  "images": [
+    {
+      "url": "https://v3.fal.media/files/penguin/lHdRabS80guysb8Zw1kul_image.png"
+    }
+  ],
+  "seed": 123456
+}
+Other types#
+RemixOutputV3#
+images list<File>
+seed integer
+Seed used for the random number generator
+BaseCharacterInputV3#
+image_urls list<string>
+A set of images to use as style references (maximum total size 10MB across all style references). The images should be in JPEG, PNG or WebP format
+rendering_speed RenderingSpeedEnum
+The rendering speed to use. Default value: "BALANCED"
+Possible enum values: TURBO, BALANCED, QUALITY
+color_palette ColorPalette
+A color palette for generation, must EITHER be specified via one of the presets (name) or explicitly via hexadecimal representations of the color with optional weights (members)
+style_codes list<string>
+A list of 8 character hexadecimal codes representing the style of the image. Cannot be used in conjunction with style_reference_images or style
+style StyleEnum
+The style type to generate with. Cannot be used with style_codes. Default value: "AUTO"
+Possible enum values: AUTO, REALISTIC, FICTION
+expand_prompt boolean
+Determine if MagicPrompt should be used in generating the request or not. Default value: true
+num_images integer
+Number of images to generate. Default value: 1
+seed integer
+Seed for the random number generator
+sync_mode boolean
+If True, the media will be returned as a data URI and the output data won't be available in the request history.
+prompt string
+The prompt to fill the masked part of the image.
+image_size ImageSize | Enum
+The resolution of the generated image Default value: square_hd
+Possible enum values: square_hd, square, portrait_4_3, portrait_16_9, landscape_4_3, landscape_16_9
+Note: For custom image sizes, you can pass the width and height as an object:
+"image_size": {
+  "width": 1280,
+  "height": 720
+}
+negative_prompt string
+Description of what to exclude from an image. Descriptions in the prompt take precedence to descriptions in the negative prompt. Default value: ""
+reference_image_urls list<string>
+A set of images to use as character references. Currently only 1 image is supported, rest will be ignored. (maximum total size 10MB across all character references). The images should be in JPEG, PNG or WebP format
+reference_mask_urls list<string>
+A set of masks to apply to the character references. Currently only 1 mask is supported, rest will be ignored. (maximum total size 10MB across all character references). The masks should be in JPEG, PNG or WebP format
+RGBColor#
+r integer
+Red color value
+g integer
+Green color value
+b integer
+Blue color value
+File#
+url string
+The URL where the file can be downloaded from.
+content_type string
+The mime type of the file.
+file_name string
+The name of the file. It will be auto-generated if not provided.
+file_size integer
+The size of the file in bytes.
+ColorPalette#
+members list<ColorPaletteMember>
+A list of color palette members that define the color palette
+name Enum
+A color palette preset value
+Possible enum values: EMBER, FRESH, JUNGLE, MAGIC, MELON, MOSAIC, PASTEL, ULTRAMARINE
+ColorPaletteMember#
+rgb RGBColor
+RGB color value for the palette member
+color_weight float
+The weight of the color in the color palette Default value: 0.5
+CharacterEditInputV3#
+image_urls list<string>
+A set of images to use as style references (maximum total size 10MB across all style references). The images should be in JPEG, PNG or WebP format
+rendering_speed RenderingSpeedEnum
+The rendering speed to use. Default value: "BALANCED"
+Possible enum values: TURBO, BALANCED, QUALITY
+color_palette ColorPalette
+A color palette for generation, must EITHER be specified via one of the presets (name) or explicitly via hexadecimal representations of the color with optional weights (members)
+style_codes list<string>
+A list of 8 character hexadecimal codes representing the style of the image. Cannot be used in conjunction with style_reference_images or style
+style StyleEnum
+The style type to generate with. Cannot be used with style_codes. Default value: "AUTO"
+Possible enum values: AUTO, REALISTIC, FICTION
+expand_prompt boolean
+Determine if MagicPrompt should be used in generating the request or not. Default value: true
+num_images integer
+Number of images to generate. Default value: 1
+seed integer
+Seed for the random number generator
+sync_mode boolean
+If True, the media will be returned as a data URI and the output data won't be available in the request history.
+prompt string
+The prompt to fill the masked part of the image.
+image_url string
+The image URL to generate an image from. MUST have the exact same dimensions (width and height) as the mask image.
+mask_url string
+The mask URL to inpaint the image. MUST have the exact same dimensions (width and height) as the input image.
+reference_image_urls list<string>
+A set of images to use as character references. Currently only 1 image is supported, rest will be ignored. (maximum total size 10MB across all character references). The images should be in JPEG, PNG or WebP format
+reference_mask_urls list<string>
+A set of masks to apply to the character references. Currently only 1 mask is supported, rest will be ignored. (maximum total size 10MB across all character references). The masks should be in JPEG, PNG or WebP format
+EditImageInputV3#
+image_urls list<string>
+A set of images to use as style references (maximum total size 10MB across all style references). The images should be in JPEG, PNG or WebP format
+rendering_speed RenderingSpeedEnum
+The rendering speed to use. Default value: "BALANCED"
+Possible enum values: TURBO, BALANCED, QUALITY
+color_palette ColorPalette
+A color palette for generation, must EITHER be specified via one of the presets (name) or explicitly via hexadecimal representations of the color with optional weights (members)
+style_codes list<string>
+A list of 8 character hexadecimal codes representing the style of the image. Cannot be used in conjunction with style_reference_images or style
+expand_prompt boolean
+Determine if MagicPrompt should be used in generating the request or not. Default value: true
+num_images integer
+Number of images to generate. Default value: 1
+seed integer
+Seed for the random number generator
+sync_mode boolean
+If True, the media will be returned as a data URI and the output data won't be available in the request history.
+style_preset Enum
+Style preset for generation. The chosen style preset will guide the generation.
+Possible enum values: 80S_ILLUSTRATION, 90S_NOSTALGIA, ABSTRACT_ORGANIC, ANALOG_NOSTALGIA, ART_BRUT, ART_DECO, ART_POSTER, AURA, AVANT_GARDE, BAUHAUS, BLUEPRINT, BLURRY_MOTION, BRIGHT_ART, C4D_CARTOON, CHILDRENS_BOOK, COLLAGE, COLORING_BOOK_I, COLORING_BOOK_II, CUBISM, DARK_AURA, DOODLE, DOUBLE_EXPOSURE, DRAMATIC_CINEMA, EDITORIAL, EMOTIONAL_MINIMAL, ETHEREAL_PARTY, EXPIRED_FILM, FLAT_ART, FLAT_VECTOR, FOREST_REVERIE, GEO_MINIMALIST, GLASS_PRISM, GOLDEN_HOUR, GRAFFITI_I, GRAFFITI_II, HALFTONE_PRINT, HIGH_CONTRAST, HIPPIE_ERA, ICONIC, JAPANDI_FUSION, JAZZY, LONG_EXPOSURE, MAGAZINE_EDITORIAL, MINIMAL_ILLUSTRATION, MIXED_MEDIA, MONOCHROME, NIGHTLIFE, OIL_PAINTING, OLD_CARTOONS, PAINT_GESTURE, POP_ART, RETRO_ETCHING, RIVIERA_POP, SPOTLIGHT_80S, STYLIZED_RED, SURREAL_COLLAGE, TRAVEL_POSTER, VINTAGE_GEO, VINTAGE_POSTER, WATERCOLOR, WEIRD, WOODBLOCK_PRINT
+prompt string
+The prompt to fill the masked part of the image.
+image_url string
+The image URL to generate an image from. MUST have the exact same dimensions (width and height) as the mask image.
+mask_url string
+The mask URL to inpaint the image. MUST have the exact same dimensions (width and height) as the input image.
+ImageSize#
+width integer
+The width of the generated image. Default value: 512
+height integer
+The height of the generated image. Default value: 512
+ReframeImageInputV3#
+image_urls list<string>
+A set of images to use as style references (maximum total size 10MB across all style references). The images should be in JPEG, PNG or WebP format
+rendering_speed RenderingSpeedEnum
+The rendering speed to use. Default value: "BALANCED"
+Possible enum values: TURBO, BALANCED, QUALITY
+color_palette ColorPalette
+A color palette for generation, must EITHER be specified via one of the presets (name) or explicitly via hexadecimal representations of the color with optional weights (members)
+style_codes list<string>
+A list of 8 character hexadecimal codes representing the style of the image. Cannot be used in conjunction with style_reference_images or style
+style Enum
+The style type to generate with. Cannot be used with style_codes.
+Possible enum values: AUTO, GENERAL, REALISTIC, DESIGN
+num_images integer
+Number of images to generate. Default value: 1
+seed integer
+Seed for the random number generator
+sync_mode boolean
+If True, the media will be returned as a data URI and the output data won't be available in the request history.
+style_preset Enum
+Style preset for generation. The chosen style preset will guide the generation.
+Possible enum values: 80S_ILLUSTRATION, 90S_NOSTALGIA, ABSTRACT_ORGANIC, ANALOG_NOSTALGIA, ART_BRUT, ART_DECO, ART_POSTER, AURA, AVANT_GARDE, BAUHAUS, BLUEPRINT, BLURRY_MOTION, BRIGHT_ART, C4D_CARTOON, CHILDRENS_BOOK, COLLAGE, COLORING_BOOK_I, COLORING_BOOK_II, CUBISM, DARK_AURA, DOODLE, DOUBLE_EXPOSURE, DRAMATIC_CINEMA, EDITORIAL, EMOTIONAL_MINIMAL, ETHEREAL_PARTY, EXPIRED_FILM, FLAT_ART, FLAT_VECTOR, FOREST_REVERIE, GEO_MINIMALIST, GLASS_PRISM, GOLDEN_HOUR, GRAFFITI_I, GRAFFITI_II, HALFTONE_PRINT, HIGH_CONTRAST, HIPPIE_ERA, ICONIC, JAPANDI_FUSION, JAZZY, LONG_EXPOSURE, MAGAZINE_EDITORIAL, MINIMAL_ILLUSTRATION, MIXED_MEDIA, MONOCHROME, NIGHTLIFE, OIL_PAINTING, OLD_CARTOONS, PAINT_GESTURE, POP_ART, RETRO_ETCHING, RIVIERA_POP, SPOTLIGHT_80S, STYLIZED_RED, SURREAL_COLLAGE, TRAVEL_POSTER, VINTAGE_GEO, VINTAGE_POSTER, WATERCOLOR, WEIRD, WOODBLOCK_PRINT
+image_url string
+The image URL to reframe
+image_size ImageSize | Enum
+The resolution for the reframed output image
+Possible enum values: square_hd, square, portrait_4_3, portrait_16_9, landscape_4_3, landscape_16_9
+Note: For custom image sizes, you can pass the width and height as an object:
+"image_size": {
+  "width": 1280,
+  "height": 720
+}
+CharacterEditOutputV3#
+images list<File>
+seed integer
+Seed used for the random number generator
+ReplaceBackgroundInputV3#
+image_urls list<string>
+A set of images to use as style references (maximum total size 10MB across all style references). The images should be in JPEG, PNG or WebP format
+rendering_speed RenderingSpeedEnum
+The rendering speed to use. Default value: "BALANCED"
+Possible enum values: TURBO, BALANCED, QUALITY
+color_palette ColorPalette
+A color palette for generation, must EITHER be specified via one of the presets (name) or explicitly via hexadecimal representations of the color with optional weights (members)
+style_codes list<string>
+A list of 8 character hexadecimal codes representing the style of the image. Cannot be used in conjunction with style_reference_images or style
+style Enum
+The style type to generate with. Cannot be used with style_codes.
+Possible enum values: AUTO, GENERAL, REALISTIC, DESIGN
+expand_prompt boolean
+Determine if MagicPrompt should be used in generating the request or not. Default value: true
+num_images integer
+Number of images to generate. Default value: 1
+seed integer
+Seed for the random number generator
+sync_mode boolean
+If True, the media will be returned as a data URI and the output data won't be available in the request history.
+style_preset Enum
+Style preset for generation. The chosen style preset will guide the generation.
+Possible enum values: 80S_ILLUSTRATION, 90S_NOSTALGIA, ABSTRACT_ORGANIC, ANALOG_NOSTALGIA, ART_BRUT, ART_DECO, ART_POSTER, AURA, AVANT_GARDE, BAUHAUS, BLUEPRINT, BLURRY_MOTION, BRIGHT_ART, C4D_CARTOON, CHILDRENS_BOOK, COLLAGE, COLORING_BOOK_I, COLORING_BOOK_II, CUBISM, DARK_AURA, DOODLE, DOUBLE_EXPOSURE, DRAMATIC_CINEMA, EDITORIAL, EMOTIONAL_MINIMAL, ETHEREAL_PARTY, EXPIRED_FILM, FLAT_ART, FLAT_VECTOR, FOREST_REVERIE, GEO_MINIMALIST, GLASS_PRISM, GOLDEN_HOUR, GRAFFITI_I, GRAFFITI_II, HALFTONE_PRINT, HIGH_CONTRAST, HIPPIE_ERA, ICONIC, JAPANDI_FUSION, JAZZY, LONG_EXPOSURE, MAGAZINE_EDITORIAL, MINIMAL_ILLUSTRATION, MIXED_MEDIA, MONOCHROME, NIGHTLIFE, OIL_PAINTING, OLD_CARTOONS, PAINT_GESTURE, POP_ART, RETRO_ETCHING, RIVIERA_POP, SPOTLIGHT_80S, STYLIZED_RED, SURREAL_COLLAGE, TRAVEL_POSTER, VINTAGE_GEO, VINTAGE_POSTER, WATERCOLOR, WEIRD, WOODBLOCK_PRINT
+prompt string
+Cyber punk city with neon lights and skyscrappers
+image_url string
+The image URL whose background needs to be replaced
+EditOutputV3#
+images list<File>
+seed integer
+Seed used for the random number generator
+RemixImageInputV3#
+image_urls list<string>
+A set of images to use as style references (maximum total size 10MB across all style references). The images should be in JPEG, PNG or WebP format
+rendering_speed RenderingSpeedEnum
+The rendering speed to use. Default value: "BALANCED"
+Possible enum values: TURBO, BALANCED, QUALITY
+color_palette ColorPalette
+A color palette for generation, must EITHER be specified via one of the presets (name) or explicitly via hexadecimal representations of the color with optional weights (members)
+style_codes list<string>
+A list of 8 character hexadecimal codes representing the style of the image. Cannot be used in conjunction with style_reference_images or style
+style Enum
+The style type to generate with. Cannot be used with style_codes.
+Possible enum values: AUTO, GENERAL, REALISTIC, DESIGN
+expand_prompt boolean
+Determine if MagicPrompt should be used in generating the request or not. Default value: true
+num_images integer
+Number of images to generate. Default value: 1
+seed integer
+Seed for the random number generator
+sync_mode boolean
+If True, the media will be returned as a data URI and the output data won't be available in the request history.
+prompt string
+The prompt to remix the image with
+image_url string
+The image URL to remix
+strength float
+Strength of the input image in the remix Default value: 0.8
+image_size ImageSize | Enum
+The resolution of the generated image Default value: square_hd
+Possible enum values: square_hd, square, portrait_4_3, portrait_16_9, landscape_4_3, landscape_16_9
+Note: For custom image sizes, you can pass the width and height as an object:
+"image_size": {
+  "width": 1280,
+  "height": 720
+}
+negative_prompt string
+Description of what to exclude from an image. Descriptions in the prompt take precedence to descriptions in the negative prompt. Default value: ""
+ReplaceBackgroundOutputV3#
+images list<File>
+seed integer
+Seed used for the random number generator
+CharacterOutputV3#
+images list<File>
+seed integer
+Seed used for the random number generator
+CharacterRemixInputV3#
+image_urls list<string>
+A set of images to use as style references (maximum total size 10MB across all style references). The images should be in JPEG, PNG or WebP format
+rendering_speed RenderingSpeedEnum
+The rendering speed to use. Default value: "BALANCED"
+Possible enum values: TURBO, BALANCED, QUALITY
+color_palette ColorPalette
+A color palette for generation, must EITHER be specified via one of the presets (name) or explicitly via hexadecimal representations of the color with optional weights (members)
+style_codes list<string>
+A list of 8 character hexadecimal codes representing the style of the image. Cannot be used in conjunction with style_reference_images or style
+style StyleEnum
+The style type to generate with. Cannot be used with style_codes. Default value: "AUTO"
+Possible enum values: AUTO, REALISTIC, FICTION
+expand_prompt boolean
+Determine if MagicPrompt should be used in generating the request or not. Default value: true
+num_images integer
+Number of images to generate. Default value: 1
+seed integer
+Seed for the random number generator
+sync_mode boolean
+If True, the media will be returned as a data URI and the output data won't be available in the request history.
+prompt string
+The prompt to remix the image with
+image_url string
+The image URL to remix
+strength float
+Strength of the input image in the remix Default value: 0.8
+image_size ImageSize | Enum
+The resolution of the generated image Default value: square_hd
+Possible enum values: square_hd, square, portrait_4_3, portrait_16_9, landscape_4_3, landscape_16_9
+Note: For custom image sizes, you can pass the width and height as an object:
+"image_size": {
+  "width": 1280,
+  "height": 720
+}
+negative_prompt string
+Description of what to exclude from an image. Descriptions in the prompt take precedence to descriptions in the negative prompt. Default value: ""
+reference_image_urls list<string>
+A set of images to use as character references. Currently only 1 image is supported, rest will be ignored. (maximum total size 10MB across all character references). The images should be in JPEG, PNG or WebP format
+reference_mask_urls list<string>
+A set of masks to apply to the character references. Currently only 1 mask is supported, rest will be ignored. (maximum total size 10MB across all character references). The masks should be in JPEG, PNG or WebP format
+CharacterRemixOutputV3#
+images list<File>
+seed integer
+Seed used for the random number generator
+ReframeOutputV3#
+images list<File>
+seed integer
+Seed used for the random number generator
+
+
+
+
+About
+GPT Image 1 is OpenAI's new state-of-the-art image generation model. It is a natively multimodal language model that accepts both text and image inputs, and produces image outputs. It is the successor to DALL-E 2 and DALL-E 3.
+Use it as a text-to-image API through fal!
+1. Calling the API#
+Install the client#
+The client provides a convenient way to interact with the model API.
+pip install fal-client
+Setup your API Key#
+Set FAL_KEY as an environment variable in your runtime.
+export FAL_KEY="YOUR_API_KEY"
+Submit a request#
+The client API handles the API submit protocol. It will handle the request status updates and return the result when the request is completed.
+PythonPython (async)
+import fal_client
+
+
+def on_queue_update(update):
+    if isinstance(update, fal_client.InProgress):
+        for log in update.logs:
+           print(log["message"])
+
+
+result = fal_client.subscribe(
+    "fal-ai/gpt-image-1/text-to-image/byok",
+    arguments={
+        "prompt": "A serene cyberpunk cityscape at twilight, with neon signs glowing in vibrant blues and purples, reflecting on rain-slick streets. Sleek futuristic buildings tower above, connected by glowing skybridges. A lone figure in a hooded jacket stands under a streetlamp, backlit by soft mist. The atmosphere is cinematic, moody",
+        "openai_api_key": ""
+    },
+    with_logs=True,
+    on_queue_update=on_queue_update,
+)
+print(result)
+2. Authentication#
+The API uses an API Key for authentication. It is recommended you set the FAL_KEY environment variable in your runtime when possible.
+API Key#
+Protect your API Key
+When running code on the client-side (e.g. in a browser, mobile app or GUI applications), make sure to not expose your FAL_KEY. Instead, use a server-side proxy to make requests to the API. For more information, check out our server-side integration guide.
+3. Queue#
+Long-running requests
+For long-running requests, such as training jobs or models with slower inference times, it is recommended to check the Queue status and rely on Webhooks instead of blocking while waiting for the result.
+Submit a request#
+The client API provides a convenient way to submit requests to the model.
+PythonPython (async)
+import fal_client
+
+
+handler = fal_client.submit(
+    "fal-ai/gpt-image-1/text-to-image/byok",
+    arguments={
+        "prompt": "A serene cyberpunk cityscape at twilight, with neon signs glowing in vibrant blues and purples, reflecting on rain-slick streets. Sleek futuristic buildings tower above, connected by glowing skybridges. A lone figure in a hooded jacket stands under a streetlamp, backlit by soft mist. The atmosphere is cinematic, moody",
+        "openai_api_key": ""
+    },
+    webhook_url="https://optional.webhook.url/for/results",
+)
+
+
+request_id = handler.request_id
+Fetch request status#
+You can fetch the status of a request to check if it is completed or still in progress.
+PythonPython (async)
+status = fal_client.status("fal-ai/gpt-image-1/text-to-image/byok", request_id, with_logs=True)
+Get the result#
+Once the request is completed, you can fetch the result. See the Output Schema for the expected result format.
+PythonPython (async)
+result = fal_client.result("fal-ai/gpt-image-1/text-to-image/byok", request_id)
+4. Files#
+Some attributes in the API accept file URLs as input. Whenever that's the case you can pass your own URL or a Base64 data URI.
+Data URI (base64)#
+You can pass a Base64 data URI as a file input. The API will handle the file decoding for you. Keep in mind that for large files, this alternative although convenient can impact the request performance.
+Hosted files (URL)#
+You can also pass your own URLs as long as they are publicly accessible. Be aware that some hosts might block cross-site requests, rate-limit, or consider the request as a bot.
+Uploading files#
+We provide a convenient file storage that allows you to upload files and use them in your requests. You can upload files using the client API and use the returned URL in your requests.
+PythonPython (async)
+url = fal_client.upload_file("path/to/file")
+Read more about file handling in our file upload guide.
+5. Schema#
+Input#
+prompt string
+The prompt to generate the image from.
+image_size ImageSizeEnum
+The size of the image to generate. Default value: "auto"
+Possible enum values: auto, 1024x1024, 1536x1024, 1024x1536
+num_images integer
+The number of images to generate. Default value: 1
+quality QualityEnum
+The quality of the image to generate. Default value: "auto"
+Possible enum values: auto, low, medium, high
+background BackgroundEnum
+The background of the image to generate. Default value: "auto"
+Possible enum values: auto, transparent, opaque
+openai_api_key string
+The OpenAI API key to use for the image generation. This endpoint is currently powered by bring-your-own-key system.
+{
+  "prompt": "A serene cyberpunk cityscape at twilight, with neon signs glowing in vibrant blues and purples, reflecting on rain-slick streets. Sleek futuristic buildings tower above, connected by glowing skybridges. A lone figure in a hooded jacket stands under a streetlamp, backlit by soft mist. The atmosphere is cinematic, moody",
+  "image_size": "auto",
+  "num_images": 1,
+  "quality": "auto",
+  "background": "auto",
+  "openai_api_key": ""
+}
+Output#
+images list<Image>
+The generated images.
+usage OpenAIUsage
+The usage details for the image generation.
+{
+  "images": [
+    {
+      "url": "https://storage.googleapis.com/falserverless/model_tests/gpt-image-1/cyberpunk.png"
+    }
+  ],
+  "usage": {
+    "input_tokens_details": {}
+  }
+}
+Other types#
+OpenAIUsage#
+input_tokens integer
+Used input tokens
+input_tokens_details OpenAIUsageInputTokensDetails
+Input tokens details
+output_tokens integer
+Used output tokens
+total_tokens integer
+Total tokens used
+ImageEditResponse#
+images list<Image>
+The edited images.
+BYOKImageEditRequest#
+image_urls list<string>
+The URLs of the images to use as a reference for the generation.
+prompt string
+The prompt to edit the image from.
+image_size ImageSizeEnum
+The size of the image to generate. Default value: "auto"
+Possible enum values: auto, 1024x1024, 1536x1024, 1024x1536
+num_images integer
+The number of images to generate. Default value: 1
+quality QualityEnum
+The quality of the image to generate. Default value: "auto"
+Possible enum values: auto, low, medium, high
+input_fidelity InputFidelityEnum
+How hard to try to preserve distinctive features from the input. Default value: "low"
+Possible enum values: low, high
+openai_api_key string
+The OpenAI API key to use for the image generation. This endpoint is currently powered by bring-your-own-key system.
+ImageGenerationResponse#
+images list<Image>
+The generated images.
+TextToImageRequest#
+prompt string
+The prompt to generate the image from.
+image_size ImageSizeEnum
+The size of the image to generate. Default value: "auto"
+Possible enum values: auto, 1024x1024, 1536x1024, 1024x1536
+num_images integer
+The number of images to generate. Default value: 1
+quality QualityEnum
+The quality of the image to generate. Default value: "auto"
+Possible enum values: auto, low, medium, high
+background BackgroundEnum
+The background of the image to generate. Default value: "auto"
+Possible enum values: auto, transparent, opaque
+OpenAIUsageInputTokensDetails#
+image_tokens integer
+Used image tokens
+text_tokens integer
+Used text tokens
+ImageEditRequest#
+image_urls list<string>
+The URLs of the images to use as a reference for the generation.
+prompt string
+The prompt to edit the image from.
+image_size ImageSizeEnum
+The size of the image to generate. Default value: "auto"
+Possible enum values: auto, 1024x1024, 1536x1024, 1024x1536
+num_images integer
+The number of images to generate. Default value: 1
+quality QualityEnum
+The quality of the image to generate. Default value: "auto"
+Possible enum values: auto, low, medium, high
+input_fidelity InputFidelityEnum
+How hard to try to preserve distinctive features from the input. Default value: "low"
+Possible enum values: low, high
+Image#
+url string
+The URL where the file can be downloaded from.
+content_type string
+The mime type of the file.
+file_name string
+The name of the file. It will be auto-generated if not provided.
+file_size integer
+The size of the file in bytes.
+file_data string
+File data
+width integer
+The width of the image in pixels.
+height integer
+The height of the image in pixels.
+ImageEditResponseBYOK#
+images list<Image>
+The edited images.
+usage OpenAIUsage
+The usage details for the image generation.

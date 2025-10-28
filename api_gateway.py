@@ -4,22 +4,49 @@ import json
 import uuid
 import requests
 import hashlib
+import base64
 from flask import Flask, request, jsonify, redirect
+from flask_cors import CORS
 from functools import wraps
 from openai import OpenAI
 import redis
+from google import genai
+from google.genai import types
+from io import BytesIO
+import fal_client
+from supabase import create_client, Client
+from dotenv import load_dotenv
+import os
+from pathlib import Path
+
+# Load environment variables
+env_path = Path('.') / '.env.local'
+load_dotenv(dotenv_path=env_path, override=True)
+# Also try .env if .env.local doesn't exist
+load_dotenv(override=True)
 
 # ==============================================================================
 # INITIALIZATION
 # ==============================================================================
 
 app = Flask(__name__)
+CORS(app, resources={r"/v1/*": {"origins": "*"}})
+
+# --- Initialize Supabase Client ---
+try:
+    supabase_url = os.environ.get("SUPABASE_URL")
+    supabase_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+    supabase: Client = create_client(supabase_url, supabase_key)
+    print("✅ Connected to Supabase")
+except Exception as e:
+    print(f"CRITICAL: Could not connect to Supabase. Error: {e}")
+    supabase = None
 
 # --- Connect to Vercel KV (Redis) for Job Tracking ---
 try:
     kv = redis.from_url(os.environ.get("KV_URL"))
 except Exception as e:
-    print(f"CRITICAL: Could not connect to Vercel KV. Job processing will fail. Error: {e}")
+    print(f"Warning: Could not connect to Vercel KV. Using Supabase only. Error: {e}")
     kv = None
 
 # --- Initialize API Clients ---
@@ -29,11 +56,22 @@ except Exception as e:
     print(f"Warning: OpenAI client failed to initialize. DALL-E will be unavailable. Error: {e}")
     openai_client = None
 
+try:
+    genai_client = genai.Client(api_key=os.environ.get("GOOGLE_API_KEY"))
+except Exception as e:
+    print(f"Warning: Google GenAI client failed to initialize. Imagen will be unavailable. Error: {e}")
+    genai_client = None
+
 # --- API Keys and Endpoints ---
 BFL_API_KEY = os.environ.get("BFL_API_KEY")
 REVE_API_KEY = os.environ.get("REVE_API_KEY")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 MINIMAX_API_KEY = os.environ.get("MINIMAX_API_KEY")
+FAL_KEY = os.environ.get("FAL_KEY")
+
+# Set FAL_KEY for fal_client
+if FAL_KEY:
+    os.environ["FAL_KEY"] = FAL_KEY
 
 BFL_API_URL_BASE = "https://api.bfl.ai/v1/"
 REVE_API_URL = "https://api.reve.com/v1/image/create"
@@ -49,7 +87,16 @@ PROVIDER_COSTS = {
     "flux-dev": 6,
     "gemini": 5,
     "reve": 5,
-    "minimax": 7
+    "minimax": 7,
+    "imagen-3": 6,
+    "imagen-4": 9,
+    "imagen-4-ultra": 12,
+    "imagen-4-fast": 7,
+    "seedream-4": 8,
+    "qwen-image": 6,
+    "seedream-3": 7,
+    "ideogram-v3": 9,
+    "gpt-image-1": 11
 }
 
 # ==============================================================================
@@ -57,27 +104,51 @@ PROVIDER_COSTS = {
 # ==============================================================================
 
 def validate_api_key(api_key):
-    """Validates API key and returns user info"""
+    """Validates API key against Supabase and returns user info"""
     if not api_key or not api_key.startswith("big_"):
         return None
 
-    # In production, this would check against your user database
-    # For now, we'll use a simple validation
-    if kv:
-        try:
-            # Check if API key exists in Redis
-            user_data = kv.get(f"api_key:{api_key}")
-            if user_data:
-                return json.loads(user_data)
-        except Exception as e:
-            print(f"Error validating API key: {e}")
+    if not supabase:
+        return None
 
-    # Fallback for demo - any key starting with "big_" is valid
-    return {
-        "user_id": hashlib.md5(api_key.encode()).hexdigest()[:8],
-        "credits": 10000,  # Demo credits
-        "plan": "pro"
-    }
+    try:
+        # Hash the API key
+        key_hash = hashlib.sha256(api_key.encode()).hexdigest()
+
+        # Check cache first
+        if kv:
+            cached = kv.get(f"api_key:{key_hash}")
+            if cached:
+                return json.loads(cached)
+
+        # Query Supabase for API key
+        response = supabase.table('api_keys').select('*, users(*)').eq('key_hash', key_hash).eq('is_active', True).execute()
+
+        if not response.data or len(response.data) == 0:
+            return None
+
+        api_key_data = response.data[0]
+        user_data = api_key_data['users']
+
+        # Update last_used_at
+        supabase.table('api_keys').update({'last_used_at': time.strftime('%Y-%m-%d %H:%M:%S')}).eq('id', api_key_data['id']).execute()
+
+        user_info = {
+            "user_id": user_data['id'],
+            "email": user_data['email'],
+            "credits": user_data['credits'],
+            "plan": user_data['plan']
+        }
+
+        # Cache for 1 hour
+        if kv:
+            kv.setex(f"api_key:{key_hash}", 3600, json.dumps(user_info))
+
+        return user_info
+
+    except Exception as e:
+        print(f"Error validating API key: {e}")
+        return None
 
 def require_api_key(f):
     """Decorator that requires valid API key"""
@@ -106,40 +177,22 @@ def require_api_key(f):
 
     return decorated_function
 
-def deduct_credits(api_key, credits_used, task_details):
-    """Deducts credits from user account and logs usage"""
-    if not kv:
-        return True  # Skip if Redis not available
+def deduct_credits(user_id, credits_used, task_details):
+    """Deducts credits from user account using Supabase stored procedure"""
+    if not supabase:
+        return True  # Skip if Supabase not available
 
     try:
-        # Get current user data
-        user_data = kv.get(f"api_key:{api_key}")
-        if user_data:
-            user_data = json.loads(user_data)
+        # Call Supabase function to deduct credits
+        result = supabase.rpc('deduct_credits', {
+            'p_user_id': user_id,
+            'p_credits': credits_used,
+            'p_description': f"Image generation - {task_details.get('task_count', 0)} tasks",
+            'p_metadata': json.dumps(task_details)
+        }).execute()
 
-            # Check if user has enough credits
-            if user_data.get("credits", 0) < credits_used:
-                return False
+        return result.data if result.data else False
 
-            # Deduct credits
-            user_data["credits"] -= credits_used
-            kv.set(f"api_key:{api_key}", json.dumps(user_data))
-
-            # Log usage for analytics
-            usage_log = {
-                "timestamp": time.time(),
-                "user_id": user_data.get("user_id"),
-                "api_key": api_key[:12] + "...",  # Partial key for logging
-                "credits_used": credits_used,
-                "task_details": task_details
-            }
-
-            # Store in usage logs (keep last 1000 entries per user)
-            usage_key = f"usage:{user_data.get('user_id')}"
-            kv.lpush(usage_key, json.dumps(usage_log))
-            kv.ltrim(usage_key, 0, 999)  # Keep only last 1000 entries
-
-        return True
     except Exception as e:
         print(f"Error deducting credits: {e}")
         return True  # Don't fail the request if credit system is down
@@ -221,6 +274,169 @@ def generate_with_minimax(prompt, aspect_ratio):
     else:
         raise RuntimeError(f"Minimax generation failed: {result.get('base_resp')}")
 
+def generate_with_imagen(prompt, provider, aspect_ratio="1:1", image_size="1024", person_generation="allow_adult", number_of_images=1):
+    """Generates an image with Google Imagen (3 or 4) and returns a base64 data URL."""
+    if not genai_client:
+        raise ConnectionError("Google GenAI client not initialized.")
+
+    # Map provider to model ID
+    model_map = {
+        "imagen-3": "imagen-3.0-generate-002",
+        "imagen-4": "imagen-4.0-generate-001",
+        "imagen-4-ultra": "imagen-4.0-ultra-generate-001",
+        "imagen-4-fast": "imagen-4.0-fast-generate-001"
+    }
+
+    model = model_map.get(provider)
+    if not model:
+        raise ValueError(f"Unknown Imagen provider: {provider}")
+
+    # Configure generation parameters
+    config_params = {
+        "number_of_images": number_of_images,
+        "aspect_ratio": aspect_ratio,
+        "person_generation": person_generation
+    }
+
+    # Add image_size only for Imagen 4 variants (not supported in Imagen 3)
+    if provider.startswith("imagen-4"):
+        # Map size to supported values (1K or 2K)
+        if image_size in ["2048", "2K", "2k"]:
+            config_params["image_size"] = "2K"
+        else:
+            config_params["image_size"] = "1K"
+
+    try:
+        # Generate images
+        response = genai_client.models.generate_images(
+            model=model,
+            prompt=prompt,
+            config=types.GenerateImagesConfig(**config_params)
+        )
+
+        # Get the first generated image
+        if not response.generated_images:
+            raise ValueError("No images generated by Imagen API")
+
+        generated_image = response.generated_images[0]
+
+        # Convert PIL Image to base64
+        buffered = BytesIO()
+        generated_image.image.save(buffered, format="PNG")
+        img_bytes = buffered.getvalue()
+        img_base64 = base64.b64encode(img_bytes).decode('utf-8')
+
+        return f"data:image/png;base64,{img_base64}"
+
+    except Exception as e:
+        raise RuntimeError(f"Imagen generation failed: {str(e)}")
+
+def generate_with_fal(prompt, provider, **kwargs):
+    """Generates an image using fal.ai models and returns the image URL."""
+    if not FAL_KEY:
+        raise ConnectionError("FAL_KEY not configured.")
+
+    # Map provider to fal.ai model ID
+    model_map = {
+        "seedream-4": "fal-ai/bytedance/seedream/v4/text-to-image",
+        "qwen-image": "fal-ai/qwen-image",
+        "seedream-3": "fal-ai/bytedance/seedream/v3/text-to-image",
+        "ideogram-v3": "fal-ai/ideogram/v3",
+        "gpt-image-1": "fal-ai/gpt-image-1/text-to-image/byok"
+    }
+
+    model_id = model_map.get(provider)
+    if not model_id:
+        raise ValueError(f"Unknown fal.ai provider: {provider}")
+
+    try:
+        # Build arguments based on provider
+        arguments = {"prompt": prompt}
+
+        if provider == "seedream-4":
+            # Seedream 4 parameters
+            if kwargs.get("image_size"):
+                arguments["image_size"] = kwargs["image_size"]
+            if kwargs.get("num_images"):
+                arguments["num_images"] = kwargs["num_images"]
+            if kwargs.get("enhance_prompt_mode"):
+                arguments["enhance_prompt_mode"] = kwargs["enhance_prompt_mode"]
+            if kwargs.get("enable_safety_checker") is not None:
+                arguments["enable_safety_checker"] = kwargs["enable_safety_checker"]
+
+        elif provider == "qwen-image":
+            # Qwen-Image parameters
+            if kwargs.get("image_size"):
+                arguments["image_size"] = kwargs["image_size"]
+            if kwargs.get("num_images"):
+                arguments["num_images"] = kwargs["num_images"]
+            if kwargs.get("guidance_scale"):
+                arguments["guidance_scale"] = kwargs["guidance_scale"]
+            if kwargs.get("negative_prompt"):
+                arguments["negative_prompt"] = kwargs["negative_prompt"]
+            if kwargs.get("acceleration"):
+                arguments["acceleration"] = kwargs["acceleration"]
+            if kwargs.get("num_inference_steps"):
+                arguments["num_inference_steps"] = kwargs["num_inference_steps"]
+
+        elif provider == "seedream-3":
+            # Seedream 3 parameters
+            if kwargs.get("image_size"):
+                arguments["image_size"] = kwargs["image_size"]
+            if kwargs.get("num_images"):
+                arguments["num_images"] = kwargs["num_images"]
+            if kwargs.get("guidance_scale"):
+                arguments["guidance_scale"] = kwargs["guidance_scale"]
+            if kwargs.get("enable_safety_checker") is not None:
+                arguments["enable_safety_checker"] = kwargs["enable_safety_checker"]
+
+        elif provider == "ideogram-v3":
+            # Ideogram V3 parameters
+            if kwargs.get("image_size"):
+                arguments["image_size"] = kwargs["image_size"]
+            if kwargs.get("num_images"):
+                arguments["num_images"] = kwargs["num_images"]
+            if kwargs.get("rendering_speed"):
+                arguments["rendering_speed"] = kwargs["rendering_speed"]
+            if kwargs.get("style"):
+                arguments["style"] = kwargs["style"]
+            if kwargs.get("style_preset"):
+                arguments["style_preset"] = kwargs["style_preset"]
+            if kwargs.get("negative_prompt"):
+                arguments["negative_prompt"] = kwargs["negative_prompt"]
+            if kwargs.get("expand_prompt") is not None:
+                arguments["expand_prompt"] = kwargs["expand_prompt"]
+
+        elif provider == "gpt-image-1":
+            # GPT Image 1 parameters (BYOK)
+            if not kwargs.get("openai_api_key"):
+                raise ValueError("gpt-image-1 requires openai_api_key parameter")
+            arguments["openai_api_key"] = kwargs["openai_api_key"]
+            if kwargs.get("image_size"):
+                arguments["image_size"] = kwargs["image_size"]
+            if kwargs.get("num_images"):
+                arguments["num_images"] = kwargs["num_images"]
+            if kwargs.get("quality"):
+                arguments["quality"] = kwargs["quality"]
+            if kwargs.get("background"):
+                arguments["background"] = kwargs["background"]
+
+        # Submit request and wait for result
+        result = fal_client.subscribe(
+            model_id,
+            arguments=arguments,
+            with_logs=False
+        )
+
+        # Extract image URL from result
+        if result and "images" in result and len(result["images"]) > 0:
+            return result["images"][0].get("url")
+        else:
+            raise ValueError(f"No images returned from {provider}")
+
+    except Exception as e:
+        raise RuntimeError(f"fal.ai {provider} generation failed: {str(e)}")
+
 # ==============================================================================
 # SYNCHRONOUS JOB PROCESSING (Fixed for Vercel)
 # ==============================================================================
@@ -250,9 +466,22 @@ def process_job_sync(tasks):
             elif provider.startswith("flux"):
                 model_map = {"flux-kontext": "flux-kontext-pro", "flux-dev": "flux-dev"}
                 model_endpoint = model_map.get(provider)
-                if not model_endpoint: 
+                if not model_endpoint:
                     raise ValueError(f"Unknown FLUX model: {provider}")
                 image_url = generate_with_bfl(prompt, model_endpoint, task.get("aspect_ratio", "1:1"))
+            elif provider.startswith("imagen"):
+                image_url = generate_with_imagen(
+                    prompt=prompt,
+                    provider=provider,
+                    aspect_ratio=task.get("aspect_ratio", "1:1"),
+                    image_size=task.get("image_size", "1024"),
+                    person_generation=task.get("person_generation", "allow_adult"),
+                    number_of_images=1
+                )
+            elif provider in ["seedream-4", "qwen-image", "seedream-3", "ideogram-v3", "gpt-image-1"]:
+                # fal.ai providers - pass all task parameters as kwargs
+                fal_params = {k: v for k, v in task.items() if k not in ["prompt", "provider"]}
+                image_url = generate_with_fal(prompt, provider, **fal_params)
             else:
                 raise ValueError(f"Unsupported provider: {provider}")
 
@@ -334,11 +563,26 @@ def create_job():
 
         # Deduct credits from user account
         if actual_credits_used > 0:
-            deduct_credits(request.api_key, actual_credits_used, {
+            deduct_credits(request.user['user_id'], actual_credits_used, {
                 "task_count": len(tasks),
                 "providers_used": [task.get("provider") for task in tasks],
                 "success_count": sum(1 for r in results if r["status"] == "Success")
             })
+
+            # Log usage to Supabase
+            if supabase:
+                try:
+                    supabase.table('usage_logs').insert({
+                        'user_id': request.user['user_id'],
+                        'provider': ', '.join(set([task.get("provider") for task in tasks])),
+                        'credits_used': actual_credits_used,
+                        'task_count': len(tasks),
+                        'success_count': sum(1 for r in results if r["status"] == "Success"),
+                        'failed_count': len(results) - sum(1 for r in results if r["status"] == "Success"),
+                        'metadata': json.dumps({"providers_used": [task.get("provider") for task in tasks]})
+                    }).execute()
+                except Exception as e:
+                    print(f"Error logging usage: {e}")
 
         # Count successes and failures
         success_count = sum(1 for r in results if r["status"] == "Success")
@@ -552,6 +796,129 @@ def list_api_keys():
         return jsonify({
             "error": f"Failed to fetch API keys: {str(e)}"
         }), 500
+
+# ==============================================================================
+# AUTHENTICATION & API KEY MANAGEMENT ENDPOINTS
+# ==============================================================================
+
+@app.route('/v1/auth/generate-api-key', methods=['POST'])
+def generate_api_key():
+    """Generate new API key for authenticated user"""
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return jsonify({"error": "Missing authorization header"}), 401
+
+    token = auth_header.replace('Bearer ', '')
+
+    try:
+        # Verify Supabase user
+        user_response = supabase.auth.get_user(token)
+        if not user_response:
+            return jsonify({"error": "Invalid token"}), 401
+
+        user_id = user_response.user.id
+
+        # Get request data
+        data = request.json or {}
+        key_name = data.get('key_name', 'My API Key')
+
+        # Generate API key
+        api_key = f"big_live_{uuid.uuid4().hex}"
+        key_hash = hashlib.sha256(api_key.encode()).hexdigest()
+        key_preview = api_key[-4:]
+
+        # Store in Supabase
+        result = supabase.table('api_keys').insert({
+            'user_id': user_id,
+            'key_name': key_name,
+            'key_prefix': 'big_live_',
+            'key_hash': key_hash,
+            'key_preview': key_preview,
+            'is_active': True
+        }).execute()
+
+        return jsonify({
+            "message": "API key created successfully",
+            "api_key": api_key,
+            "key_name": key_name,
+            "key_preview": f"...{key_preview}",
+            "warning": "Save this key now. You won't be able to see it again."
+        }), 201
+
+    except Exception as e:
+        print(f"Error generating API key: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/v1/auth/api-keys', methods=['GET'])
+def list_user_api_keys():
+    """List all API keys for authenticated user"""
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return jsonify({"error": "Missing authorization header"}), 401
+
+    token = auth_header.replace('Bearer ', '')
+
+    try:
+        # Verify Supabase user
+        user_response = supabase.auth.get_user(token)
+        if not user_response:
+            return jsonify({"error": "Invalid token"}), 401
+
+        user_id = user_response.user.id
+
+        # Get API keys from Supabase
+        keys_response = supabase.table('api_keys').select('*').eq('user_id', user_id).execute()
+
+        api_keys = []
+        for key_data in keys_response.data:
+            api_keys.append({
+                "id": key_data['id'],
+                "name": key_data['key_name'],
+                "key_preview": f"big_live_...{key_data['key_preview']}",
+                "is_active": key_data['is_active'],
+                "created_at": key_data['created_at'],
+                "last_used_at": key_data['last_used_at']
+            })
+
+        return jsonify({"api_keys": api_keys}), 200
+
+    except Exception as e:
+        print(f"Error listing API keys: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/v1/auth/api-keys/<key_id>', methods=['DELETE'])
+def delete_api_key(key_id):
+    """Delete an API key"""
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith('Bearer '):
+        return jsonify({"error": "Missing authorization header"}), 401
+
+    token = auth_header.replace('Bearer ', '')
+
+    try:
+        # Verify Supabase user
+        user_response = supabase.auth.get_user(token)
+        if not user_response:
+            return jsonify({"error": "Invalid token"}), 401
+
+        user_id = user_response.user.id
+
+        # Delete API key
+        supabase.table('api_keys').delete().eq('id', key_id).eq('user_id', user_id).execute()
+
+        # Clear cache
+        if kv:
+            # We don't have the key_hash here, so just clear all caches
+            pass
+
+        return jsonify({"message": "API key deleted successfully"}), 200
+
+    except Exception as e:
+        print(f"Error deleting API key: {e}")
+        return jsonify({"error": str(e)}), 500
+
 
 @app.route('/')
 def index():

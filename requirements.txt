@@ -1,4 +1,12 @@
 Flask
+Flask-CORS
 openai
 redis
 requests
+google-genai
+Pillow
+fal-client
+supabase
+python-dotenv
+pyjwt
+bcrypt

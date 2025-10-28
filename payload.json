@@ -21,6 +21,64 @@
     {
       "prompt": "Abstract art representing the concept of speed, vibrant colors",
       "provider": "flux-kontext"
+    },
+    {
+      "prompt": "close-up photo of a woman in her 20s, street photography, movie still, muted orange warm tones",
+      "provider": "imagen-3",
+      "aspect_ratio": "1:1"
+    },
+    {
+      "prompt": "A photorealistic image of a modern building with water in the background, architectural photography, golden hour lighting",
+      "provider": "imagen-4",
+      "aspect_ratio": "16:9",
+      "image_size": "1K"
+    },
+    {
+      "prompt": "Robot holding a red skateboard, high detail, studio lighting, 4K HDR",
+      "provider": "imagen-4-ultra",
+      "aspect_ratio": "1:1",
+      "image_size": "2K",
+      "person_generation": "allow_adult"
+    },
+    {
+      "prompt": "A serene landscape with mountains at sunset, wide angle lens, vibrant colors",
+      "provider": "imagen-4-fast",
+      "aspect_ratio": "9:16"
+    },
+    {
+      "prompt": "A trendy restaurant with a digital menu board displaying text, with diners enjoying their meals, ultra high quality 4K",
+      "provider": "seedream-4",
+      "image_size": "auto_2K",
+      "enhance_prompt_mode": "standard",
+      "enable_safety_checker": true
+    },
+    {
+      "prompt": "Mount Fuji with cherry blossoms in the foreground, clear sky, peaceful spring day, soft natural light, realistic landscape",
+      "provider": "qwen-image",
+      "image_size": "landscape_4_3",
+      "guidance_scale": 2.5,
+      "acceleration": "none"
+    },
+    {
+      "prompt": "Fisheye lens, the head of a cat, the image shows the effect that the facial features of the cat are distorted due to the shooting method",
+      "provider": "seedream-3",
+      "image_size": "square_hd",
+      "guidance_scale": 2.5
+    },
+    {
+      "prompt": "A mystical forest with glowing mushrooms and fireflies at night, magical atmosphere, fantasy art style",
+      "provider": "ideogram-v3",
+      "image_size": "square_hd",
+      "rendering_speed": "BALANCED",
+      "style": "GENERAL",
+      "expand_prompt": true
+    },
+    {
+      "prompt": "A serene cyberpunk cityscape at twilight, with neon signs glowing in vibrant blues and purples, reflecting on rain-slick streets",
+      "provider": "gpt-image-1",
+      "image_size": "1024x1024",
+      "quality": "high",
+      "openai_api_key": "YOUR_OPENAI_API_KEY_HERE"
     }
   ]
 }
